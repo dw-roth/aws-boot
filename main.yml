@@ -53,73 +53,75 @@ Resources:
       ResourceSignal:
         Timeout: PT15M
         Count: 1
-      Metadata:
-        AWS::CloudFormation::Init:
-          config:
-            packages:
-              yum:
-                wget: []
-                unzip: []
-      Properties:
-        ImageId: !Ref EC2AMI
-        InstanceType: !Ref EC2InstanceType
-        IamInstanceProfile: !Ref InstanceProfile
-        Monitoring: true
-        SecurityGroupIds:
-          - !GetAtt SecurityGroup.GroupId
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash -xe
-            #
-            # send script output to /tmp so we can debug boot failures
-            exec > /tmp/userdata.log 2>&1
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              wget: []
+              unzip: []
+    Properties:
+      ImageId: !Ref EC2AMI
+      InstanceType: !Ref EC2InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      Monitoring: true
+      SecurityGroupIds:
+        - !GetAtt SecurityGroup.GroupId
+      UserData:
+        Fn::Base64: 
+          !Sub |
+          #!/bin/bash -xe
+          #
+          # send script output to /tmp so we can debug boot failures
+          exec > /tmp/userdata.log 2>&1
 
-            #update all packages
-            yum -y update
+          #update all packages
+          yum -y update
 
-            # Get latest cfn scripts
-            yum install -y aws-cfn-bootstrap
+          # Get latest cfn scripts
+          yum install -y aws-cfn-bootstrap
 
-            # Have CloudFormation install any files and packages from the metadata
-            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --region ${AWS::Region} --resource Instance
+          # Have CloudFormation install any files and packages from the metadata
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --region ${AWS::Region} --resource Instance
 
-            cat > /tmp/install_script.sh << EOF
-              #START
-              echo "Setting up NodeJS Environment"
-              curl https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+          cat > /tmp/install_script.sh << EOF
 
-              #Dot source the files to ensure that variables are available within the current shell
-              . /home/ec2-user/.nvm/nvm.sh
-              . /home/ec2-user/.bashrc
+          #START
+          echo "Setting up NodeJS Environment"
+          curl https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
 
-              #Install NVM, NPM, NodeJS
-              nvm alias default v12.7.0
-              nvm install v12.7.0
-              nvm use v12.7.0
+          #Dot source the files to ensure that variables are available within the current shell
+          . /home/ec2-user/.nvm/nvm.sh
+          . /home/ec2-user/.bashrc
 
-              #Download latest code and put it into /home/ec2-user/app
-              wget https://github.com/dw-roth/aws-boot/archive/master.zip
-              unzip master.zip
-              mv aws-boot-master app
+          #Install NVM, NPM, NodeJS
+          nvm alias default v12.7.0
+          nvm install v12.7.0
+          nvm use v12.7.0
 
-              # Create log directory
-              mkdir -p /home/ec2-user/app/logs
+          #Download latest code and put it into /home/ec2-user/app
+          wget https://github.com/dw-roth/aws-boot/archive/master.zip
+          unzip master.zip
+          mv aws-boot-master app
 
-              # Run server
-              cd app
-              npm install
-              npm start
-            EOF
+          # Create log directory
+          mkdir -p /home/ec2-user/app/logs
 
-            chown ec2-user:ec2-user /tmp/install_script.sh && chmod a+x /tmp/install_script.sh
-            sleep 1; su - ec2-user -c "tmp/install_script.sh"
+          # Run server
+          cd app
+          npm install
+          npm start
+          EOF
 
-            # Signal to CloudFormation that the instance is ready
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} --resource Instance
+          chown ec2-user:ec2-user /tmp/install_script.sh && chmod a+x /tmp/install_script.sh
+          sleep 1; su - ec2-user -c "tmp/install_script.sh"
 
-        Tags:
-          - Key: Name
-            Value: !Ref AWS::StackName
+          # Signal to CloudFormation that the instance is ready
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} --resource Instance
+
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
 
 Outputs:
   InstanceEndpoint:
